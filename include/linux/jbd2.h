@@ -556,6 +556,171 @@ struct transaction_chp_stats_s {
  *
  */
 
+#ifdef j_atomic_set
+struct atomic_list 
+{
+    struct journal_head *l_head; 
+    struct journal_head *l_tail;
+}
+
+
+struct transaction_s
+{
+	/* Pointer to the journal for this transaction. [no locking] */
+	journal_t		*t_journal;
+
+	/* Sequence number for this transaction [no locking] */
+	tid_t			t_tid;
+
+	/*
+	 * Transaction's current state
+	 * [no locking - only kjournald2 alters this]
+	 * [j_list_lock] guards transition of a transaction into T_FINISHED
+	 * state and subsequent call of __jbd2_journal_drop_transaction()
+	 * FIXME: needs barriers
+	 * KLUDGE: [use j_state_lock]
+	 */
+	enum {
+		T_RUNNING,
+		T_LOCKED,
+		T_SWITCH,
+		T_FLUSH,
+		T_COMMIT,
+		T_COMMIT_DFLUSH,
+		T_COMMIT_JFLUSH,
+		T_COMMIT_CALLBACK,
+		T_FINISHED
+	}			t_state;
+
+	/*
+	 * Where in the log does this transaction's commit start? [no locking]
+	 */
+	unsigned long		t_log_start;
+
+	/* Number of buffers on the t_buffers list [j_list_lock] */
+	int			t_nr_buffers;
+
+	/*
+	 * Doubly-linked list of all buffers reserved but not yet
+	 * modified by this transaction 
+	 */
+	struct atomic_list  t_reserved_list;
+
+	/*
+	 * Doubly-linked list of all metadata buffers owned by this
+	 * transaction 
+	 */
+	struct atomic_list 	t_buffers;
+
+	/*
+	 * Doubly-linked list of all forget buffers (superseded
+	 * buffers which we can un-checkpoint once this transaction commits)
+	 * 
+	 */
+	struct atomic_list 	t_forget;
+
+	/*
+	 * Doubly-linked list of all buffers still to be flushed before
+	 * this transaction can be checkpointed. 
+	 */
+	struct atomic_list	t_checkpoint_list;
+
+	/*
+	 * Doubly-linked list of all buffers submitted for IO while
+	 * checkpointing. 
+	 */
+	struct atomic_list  t_checkpoint_io_list;
+
+	/*
+	 * Doubly-linked list of metadata buffers being shadowed by log
+	 * IO.  The IO buffers on the iobuf list and the shadow buffers on this
+	 * list match each other one for one at all times. 
+	 */
+	struct atomic_list  t_shadow_list;
+
+	/*
+	 * List of inodes whose data we've modified in data=ordered mode.
+	 * [j_list_lock]
+	 */
+	struct list_head	t_inode_list;
+
+	/*
+	 * Protects info related to handles
+	 */
+	spinlock_t		t_handle_lock;
+
+	/*
+	 * Longest time some handle had to wait for running transaction
+	 */
+	unsigned long		t_max_wait;
+
+	/*
+	 * When transaction started
+	 */
+	unsigned long		t_start;
+
+	/*
+	 * When commit was requested
+	 */
+	unsigned long		t_requested;
+
+	/*
+	 * Checkpointing stats [j_checkpoint_sem]
+	 */
+	struct transaction_chp_stats_s t_chp_stats;
+
+	/*
+	 * Number of outstanding updates running on this transaction
+	 * [none]
+	 */
+	atomic_t		t_updates;
+
+	/*
+	 * Number of buffers reserved for use by all handles in this transaction
+	 * handle but not yet modified. [none]
+	 */
+	atomic_t		t_outstanding_credits;
+
+	/*
+	 * Forward and backward links for the circular list of all transactions
+	 * awaiting checkpoint. [j_list_lock]
+	 */
+	transaction_t		*t_cpnext, *t_cpprev;
+
+	/*
+	 * When will the transaction expire (become due for commit), in jiffies?
+	 * [no locking]
+	 */
+	unsigned long		t_expires;
+
+	/*
+	 * When this transaction started, in nanoseconds [no locking]
+	 */
+	ktime_t			t_start_time;
+
+	/*
+	 * How many handles used this transaction? [none]
+	 */
+	atomic_t		t_handle_count;
+
+	/*
+	 * This transaction is being forced and some process is
+	 * waiting for it to finish.
+	 */
+	unsigned int t_synchronous_commit:1;
+
+	/* Disk flush needs to be sent to fs partition [no locking] */
+	int			t_need_data_flush;
+
+	/*
+	 * For use by the filesystem to store fs-specific data
+	 * structures associated with the transaction
+	 */
+	struct list_head	t_private_list;
+};
+
+#else
+
 struct transaction_s
 {
 	/* Pointer to the journal for this transaction. [no locking] */
@@ -710,6 +875,7 @@ struct transaction_s
 	 */
 	struct list_head	t_private_list;
 };
+#endif // j_atomic_set
 
 struct transaction_run_stats_s {
 	unsigned long		rs_wait;
