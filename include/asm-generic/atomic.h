@@ -184,6 +184,16 @@ ATOMIC_OP(xor, ^)
  */
 #define atomic_set(v, i) WRITE_ONCE(((v)->counter), (i))
 
+
+/**
+ * j_atomic_set - set atomic list entry and return old
+ * @old : pointer of old value
+ * @new : pointer of required value
+ * 
+ * Atomically set the value of @old to @new and return @old
+ */
+#define j_atomic_set
+
 #include <linux/irqflags.h>
 
 static inline void atomic_add(int i, atomic_t *v)
