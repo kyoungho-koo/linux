@@ -479,9 +479,13 @@ repeat:
 	 * copying is moved to the transaction's shadow queue.
 	 */
 	JBUFFER_TRACE(jh_in, "file as BJ_Shadow");
+#ifdef j_atomic_set
+	__jbd2_journal_file_buffer(jh_in, transaction, BJ_Shadow);
+#else
 	spin_lock(&journal->j_list_lock);
 	__jbd2_journal_file_buffer(jh_in, transaction, BJ_Shadow);
 	spin_unlock(&journal->j_list_lock);
+#endif
 	set_buffer_shadow(bh_in);
 	jbd_unlock_bh_state(bh_in);
 

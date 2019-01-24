@@ -960,9 +960,13 @@ repeat:
 		 * Paired with barrier in jbd2_write_access_granted()
 		 */
 		smp_wmb();
+#ifdef j_atomic_set
+		__jbd2_journal_file_buffer(jh, transaction, BJ_Reserved);
+#else
 		spin_lock(&journal->j_list_lock);
 		__jbd2_journal_file_buffer(jh, transaction, BJ_Reserved);
 		spin_unlock(&journal->j_list_lock);
+#endif
 		goto done;
 	}
 	/*
@@ -1192,9 +1196,13 @@ int jbd2_journal_get_create_access(handle_t *handle, struct buffer_head *bh)
 		jh->b_modified = 0;
 
 		JBUFFER_TRACE(jh, "file as BJ_Reserved");
+#ifdef j_atomic_set
+		__jbd2_journal_file_buffer(jh, transaction, BJ_Reserved);
+#else
 		spin_lock(&journal->j_list_lock);
 		__jbd2_journal_file_buffer(jh, transaction, BJ_Reserved);
 		spin_unlock(&journal->j_list_lock);
+#endif
 	} else if (jh->b_transaction == journal->j_committing_transaction) {
 		/* first access by this transaction */
 		jh->b_modified = 0;
@@ -1494,9 +1502,13 @@ int jbd2_journal_dirty_metadata(handle_t *handle, struct buffer_head *bh)
 	J_ASSERT_JH(jh, jh->b_frozen_data == NULL);
 
 	JBUFFER_TRACE(jh, "file as BJ_Metadata");
+#ifdef j_atomic_set
+	__jbd2_journal_file_buffer(jh, transaction, BJ_Metadata);
+#else
 	spin_lock(&journal->j_list_lock);
 	__jbd2_journal_file_buffer(jh, transaction, BJ_Metadata);
 	spin_unlock(&journal->j_list_lock);
+#endif
 out_unlock_bh:
 	jbd_unlock_bh_state(bh);
 out:
