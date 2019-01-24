@@ -1832,7 +1832,7 @@ free_and_exit:
 static inline void
 __blist_add_buffer(struct atomic_list *list, struct journal_head *jh)
 {
-  jh->b_tprev = j_atomic_set(&list->tail, &jh);
+  jh->b_tprev = j_atomic_set(&list->l_tail, &jh);
   if (jh->b_tprev == NULL) {
     list->l_head = jh;
   } else {
@@ -2387,12 +2387,18 @@ int jbd2_journal_invalidatepage(journal_t *journal,
 void __jbd2_journal_file_buffer(struct journal_head *jh,
 			transaction_t *transaction, int jlist)
 {
+#ifdef j_atomic_set
+  struct atomic_list*  *list = NULL;
+#else
 	struct journal_head **list = NULL;
+#endif
 	int was_dirty = 0;
 	struct buffer_head *bh = jh2bh(jh);
 
 	J_ASSERT_JH(jh, jbd_is_locked_bh_state(bh));
+#ifndef j_atomic_set
 	assert_spin_locked(&transaction->t_journal->j_list_lock);
+#endif
 
 	J_ASSERT_JH(jh, jh->b_jlist < BJ_Types);
 	J_ASSERT_JH(jh, jh->b_transaction == transaction ||

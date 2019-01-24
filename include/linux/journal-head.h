@@ -12,7 +12,11 @@
 #define JOURNAL_HEAD_H_INCLUDED
 
 typedef unsigned int		tid_t;		/* Unique transaction ID */
+#ifdef j_atomic_set
+typedef struct atomic_transaction_s transaction_t;
+#else
 typedef struct transaction_s	transaction_t;	/* Compound transaction type */
+#endif
 
 
 struct buffer_head;
