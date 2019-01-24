@@ -71,8 +71,7 @@ struct journal_head {
 	 * Either of these locks is enough for reading, both are needed for
 	 * changes.
 	 */
-	transaction_t *b_transaction;
-
+	transaction_t *b_transaction; 
 	/*
 	 * Pointer to the running compound transaction which is currently
 	 * modifying the buffer's metadata, if there was already a transaction
@@ -81,11 +80,33 @@ struct journal_head {
 	 */
 	transaction_t *b_next_transaction;
 
+#ifdef j_atomic_set
+	/*
+	 * Doubly-linked list of buffers on a transaction's data, metadata or
+	 * forget queue. [jbd_lock_bh_state()]
+	 */
+	struct journal_head *b_tnext, *b_tprev;
+
+    /*
+	 * Doubly-linked list of buffers on a transaction's data, metadata or
+	 * forget queue. [jbd_lock_bh_state()]
+     *
+     */ 
+    struct journal_head *gc_prev, *gc_next;
+    
+
+    atomic_t remove;
+
+
+
+#else
 	/*
 	 * Doubly-linked list of buffers on a transaction's data, metadata or
 	 * forget queue. [t_list_lock] [jbd_lock_bh_state()]
 	 */
 	struct journal_head *b_tnext, *b_tprev;
+#endif
+
 
 	/*
 	 * Pointer to the compound transaction against which this buffer

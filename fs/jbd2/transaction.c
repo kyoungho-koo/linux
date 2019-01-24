@@ -1853,6 +1853,19 @@ __blist_add_buffer(struct atomic_list *list, struct journal_head *jh)
   
 }
 
+static inline void
+__blist_del_buffer(struct atomic_list  *list, struct journal_head *jh)
+{
+  atomic_set(jh->remove, 1);
+  jh->gc_prev = j_atomic_set(&list->l_tail, &jh);
+  if(jh->gc_prev == NULL)
+    list->l_head = jh;
+  else
+    jh->gc_prev->gc_next = jh;
+}
+
+#else
+
 /*
  * Append a buffer to a transaction list, given the transaction's list head
  * pointer.
@@ -1897,6 +1910,7 @@ __blist_del_buffer(struct journal_head **list, struct journal_head *jh)
 	jh->b_tprev->b_tnext = jh->b_tnext;
 	jh->b_tnext->b_tprev = jh->b_tprev;
 }
+#endif
 
 /*
  * Remove a buffer from the appropriate transaction list.
@@ -1911,19 +1925,27 @@ __blist_del_buffer(struct journal_head **list, struct journal_head *jh)
  */
 static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 {
+#ifdef j_atomic_set
+	struct atomic_list *list = NULL;
+#else
 	struct journal_head **list = NULL;
+#endif
 	transaction_t *transaction;
 	struct buffer_head *bh = jh2bh(jh);
 
 	J_ASSERT_JH(jh, jbd_is_locked_bh_state(bh));
 	transaction = jh->b_transaction;
+#ifndef j_atomic_set
 	if (transaction)
 		assert_spin_locked(&transaction->t_journal->j_list_lock);
+#endif
 
 	J_ASSERT_JH(jh, jh->b_jlist < BJ_Types);
 	if (jh->b_jlist != BJ_None)
 		J_ASSERT_JH(jh, transaction != NULL);
 
+    
+#ifndef j_atomic_set
 	switch (jh->b_jlist) {
 	case BJ_None:
 		return;
@@ -1942,6 +1964,9 @@ static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 		list = &transaction->t_reserved_list;
 		break;
 	}
+#endif
+    list = &transaction->t_gc_list;
+#else
 
 	__blist_del_buffer(list, jh);
 	jh->b_jlist = BJ_None;
@@ -2472,9 +2497,13 @@ void jbd2_journal_file_buffer(struct journal_head *jh,
 				transaction_t *transaction, int jlist)
 {
 	jbd_lock_bh_state(jh2bh(jh));
+#ifdef j_atomic_set
+	__jbd2_journal_file_buffer(jh, transaction, jlist);
+#else
 	spin_lock(&transaction->t_journal->j_list_lock);
 	__jbd2_journal_file_buffer(jh, transaction, jlist);
 	spin_unlock(&transaction->t_journal->j_list_lock);
+#endif
 	jbd_unlock_bh_state(jh2bh(jh));
 }
 

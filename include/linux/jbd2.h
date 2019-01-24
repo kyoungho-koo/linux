@@ -564,7 +564,7 @@ struct atomic_list
 }
 
 
-struct transaction_s
+struct atomic_transaction_s
 {
 	/* Pointer to the journal for this transaction. [no locking] */
 	journal_t		*t_journal;
@@ -637,6 +637,12 @@ struct transaction_s
 	 * list match each other one for one at all times. 
 	 */
 	struct atomic_list  t_shadow_list;
+
+    /*
+	 * Doubly-linked list of garbage collect buffers 
+     *
+     */
+    struct atomic_list t_gc_list;
 
 	/*
 	 * List of inodes whose data we've modified in data=ordered mode.
