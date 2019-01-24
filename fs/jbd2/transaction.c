@@ -1828,6 +1828,19 @@ free_and_exit:
  *
  */
 
+#ifdef j_atomic_set
+static inline void
+__blist_add_buffer(struct atomic_list *list, struct journal_head *jh)
+{
+  jh->b_tprev = j_atomic_set(&list->tail, &jh);
+  if (jh->b_tprev == NULL) {
+    list->l_head = jh;
+  } else {
+    jh->b_tprev->b_tnext = jh; 
+  }
+  
+}
+
 /*
  * Append a buffer to a transaction list, given the transaction's list head
  * pointer.
