@@ -1967,9 +1967,9 @@ static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 		list = &transaction->t_reserved_list;
 		break;
 	}
-#endif
-    list = &transaction->t_gc_list;
 #else
+    list = &transaction->t_gc_list;
+#endif
 
 	__blist_del_buffer(list, jh);
 	jh->b_jlist = BJ_None;
