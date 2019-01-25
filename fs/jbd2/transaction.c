@@ -1600,8 +1600,9 @@ int jbd2_journal_forget (handle_t *handle, struct buffer_head *bh)
 		 * now refile the buffer on our BJ_Forget list so that
 		 * we know to remove the checkpoint after we commit.
 		 */
-
+#ifndef j_atomic_set
 		spin_lock(&journal->j_list_lock);
+#endif
 		if (jh->b_cp_transaction) {
 			__jbd2_journal_temp_unlink_buffer(jh);
 			__jbd2_journal_file_buffer(jh, transaction, BJ_Forget);
@@ -1614,7 +1615,9 @@ int jbd2_journal_forget (handle_t *handle, struct buffer_head *bh)
 				goto drop;
 			}
 		}
+#ifndef j_atomic_set
 		spin_unlock(&journal->j_list_lock);
+#endif
 	} else if (jh->b_transaction) {
 		J_ASSERT_JH(jh, (jh->b_transaction ==
 				 journal->j_committing_transaction));
@@ -1950,7 +1953,7 @@ static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 	case BJ_None:
 		return;
 	case BJ_Metadata:
-		transaction->t_nr_buffers--;
+		transaction->t_nr_buffers--; // WARNING
 		J_ASSERT_JH(jh, transaction->t_nr_buffers >= 0);
 		list = &transaction->t_buffers;
 		break;
@@ -1997,9 +2000,13 @@ void jbd2_journal_unfile_buffer(journal_t *journal, struct journal_head *jh)
 	/* Get reference so that buffer cannot be freed before we unlock it */
 	get_bh(bh);
 	jbd_lock_bh_state(bh);
+#ifdef j_atomic_set
+	__jbd2_journal_unfile_buffer(jh);
+#else
 	spin_lock(&journal->j_list_lock);
 	__jbd2_journal_unfile_buffer(jh);
 	spin_unlock(&journal->j_list_lock);
+#endif
 	jbd_unlock_bh_state(bh);
 	__brelse(bh);
 }
@@ -2211,7 +2218,9 @@ static int journal_unmap_buffer(journal_t *journal, struct buffer_head *bh,
 	/* OK, we have data buffer in journaled mode */
 	write_lock(&journal->j_state_lock);
 	jbd_lock_bh_state(bh);
+#ifndef j_atomic_set
 	spin_lock(&journal->j_list_lock);
+#endif
 
 	jh = jbd2_journal_grab_journal_head(bh);
 	if (!jh)
@@ -2296,7 +2305,9 @@ static int journal_unmap_buffer(journal_t *journal, struct buffer_head *bh,
 		 */
 		if (partial_page) {
 			jbd2_journal_put_journal_head(jh);
+#ifndef j_atomic_set
 			spin_unlock(&journal->j_list_lock);
+#endif
 			jbd_unlock_bh_state(bh);
 			write_unlock(&journal->j_state_lock);
 			return -EBUSY;
@@ -2311,7 +2322,9 @@ static int journal_unmap_buffer(journal_t *journal, struct buffer_head *bh,
 		if (journal->j_running_transaction && buffer_jbddirty(bh))
 			jh->b_next_transaction = journal->j_running_transaction;
 		jbd2_journal_put_journal_head(jh);
+#ifndef j_atomic_set
 		spin_unlock(&journal->j_list_lock);
+#endif
 		jbd_unlock_bh_state(bh);
 		write_unlock(&journal->j_state_lock);
 		return 0;
@@ -2339,7 +2352,9 @@ zap_buffer:
 	jh->b_modified = 0;
 	jbd2_journal_put_journal_head(jh);
 zap_buffer_no_jh:
+#ifndef j_atomic_set
 	spin_unlock(&journal->j_list_lock);
+#endif
 	jbd_unlock_bh_state(bh);
 	write_unlock(&journal->j_state_lock);
 zap_buffer_unlocked:
