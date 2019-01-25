@@ -192,7 +192,16 @@ ATOMIC_OP(xor, ^)
  * 
  * Atomically set the value of @old to @new and return @old
  */
-#define j_atomic_set
+#define j_atomic_set(old, new)						 \
+static inline 								 \
+struct journal_head* j_atomic_set(journal_head** old, journal_head** new)\
+{									 \
+	journal_head* ret = *(new);					 \
+	asm volatile ("xchg" "q %q0, %1\n"				 \
+		: "+r"(ret), "+m" ((*old))				 \
+		:: "memory", "cc");					 \
+	return ret;							 \
+}
 
 #include <linux/irqflags.h>
 
