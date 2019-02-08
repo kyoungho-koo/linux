@@ -194,9 +194,9 @@ ATOMIC_OP(xor, ^)
  */
 #define j_atomic_set(old, new)						 \
 static inline 								 \
-struct journal_head* j_atomic_set(journal_head** old, journal_head** new)\
+struct journal_head* j_atomic_set(journal_head** old, journal_head* new)\
 {									 \
-	journal_head* ret = *(new);					 \
+	journal_head* ret = new;					 \
 	asm volatile ("xchg" "q %q0, %1\n"				 \
 		: "+r"(ret), "+m" ((*old))				 \
 		:: "memory", "cc");					 \
