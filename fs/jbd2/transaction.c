@@ -1867,6 +1867,16 @@ __blist_del_buffer(struct atomic_list  *list, struct journal_head *jh)
     jh->gc_prev->gc_next = jh;
 }
 
+static inline void
+__blist_unlink_buffer(struct atomic_list *list, struct journal_head *jh)_
+{
+    struct journal_head *list_head = list->l_head;
+    if(list_head != NULL && list_head->b_tnext != NULL) {
+      j_atomic_cmpxchg (list_head->b_tnext->b_tprev, list_head, NULL);
+    }
+    
+}
+
 #else
 
 /*
@@ -1926,13 +1936,57 @@ __blist_del_buffer(struct journal_head **list, struct journal_head *jh)
  *
  * Called under j_list_lock.
  */
+
+#ifndef j_atomic_set
 static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 {
-#ifdef j_atomic_set
-	struct atomic_list *list = NULL;
-#else
 	struct journal_head **list = NULL;
-#endif
+	transaction_t *transaction;
+	struct buffer_head *bh = jh2bh(jh);
+
+	J_ASSERT_JH(jh, jbd_is_locked_bh_state(bh));
+	transaction = jh->b_transaction;
+	if (transaction)
+		assert_spin_locked(&transaction->t_journal->j_list_lock);
+
+	J_ASSERT_JH(jh, jh->b_jlist < BJ_Types);
+	if (jh->b_jlist != BJ_None)
+		J_ASSERT_JH(jh, transaction != NULL);
+
+    
+	switch (jh->b_jlist) {
+	case BJ_None:
+		return;
+	case BJ_Metadata:
+		transaction->t_nr_buffers--; // WARNING
+		J_ASSERT_JH(jh, transaction->t_nr_buffers >= 0);
+		list = &transaction->t_buffers;
+		break;
+	case BJ_Forget:
+		list = &transaction->t_forget;
+		break;
+	case BJ_Shadow:
+		list = &transaction->t_shadow_list;
+		break;
+	case BJ_Reserved:
+		list = &transaction->t_reserved_list;
+		break;
+	}
+
+	__blist_del_buffer(list, jh);
+	jh->b_jlist = BJ_None;
+	if (transaction && is_journal_aborted(transaction->t_journal))
+		clear_buffer_jbddirty(bh);
+	else if (test_clear_buffer_jbddirty(bh))
+		mark_buffer_dirty(bh);	/* Expose it to the VM */
+}
+
+
+#else
+
+static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
+{
+	struct atomic_list *list = NULL;
 	transaction_t *transaction;
 	struct buffer_head *bh = jh2bh(jh);
 
@@ -1967,9 +2021,7 @@ static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 		list = &transaction->t_reserved_list;
 		break;
 	}
-#else
     list = &transaction->t_gc_list;
-#endif
 
 	__blist_del_buffer(list, jh);
 	jh->b_jlist = BJ_None;
@@ -1978,6 +2030,7 @@ static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 	else if (test_clear_buffer_jbddirty(bh))
 		mark_buffer_dirty(bh);	/* Expose it to the VM */
 }
+#endif
 
 /*
  * Remove buffer from all transactions.

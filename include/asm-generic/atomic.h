@@ -203,6 +203,8 @@ struct journal_head* j_atomic_set(journal_head** old, journal_head* new)\
 	return ret;							 \
 }
 
+#define j_atomic_cmpxchg(v, old, new) (cmpxchg(&(v), (old), (new)))
+
 #include <linux/irqflags.h>
 
 static inline void atomic_add(int i, atomic_t *v)
